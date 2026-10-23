@@ -1,0 +1,635 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//
+// ============================================================
+// ENUMS
+// ============================================================
+//
+
+enum RoleName {
+  STUDENT
+  CLEARANCE_STAFF
+  DEPARTMENT_STAFF
+  REGISTRAR
+  FINANCE_OFFICER
+  LIBRARY_OFFICER
+  PROPERTY_OFFICER
+  ADMINISTRATOR
+  SUPER_ADMINISTRATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+enum SemesterStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+}
+
+enum ClearanceItemStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  RETURNED
+  NOT_APPLICABLE
+}
+
+enum ClearanceRequestStatus {
+  DRAFT
+  SUBMITTED
+  IN_PROGRESS
+  ACTION_REQUIRED
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkflowStepType {
+  START
+  APPROVAL
+  REVIEW
+  END
+}
+
+enum ApprovalStatus {
+  APPROVED
+  REJECTED
+}
+
+//
+// ============================================================
+// IDENTITY & ACCESS MANAGEMENT
+// ============================================================
+//
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  email        String     @unique
+  passwordHash String
+  firstName    String
+  middleName   String?
+  lastName     String
+  phone        String?
+  status       UserStatus @default(ACTIVE)
+
+  roles        UserRole[]
+  student      Student?
+  staff        Staff?
+  approvals    Approval[]
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([email])
+  @@index([username])
+  @@index([status])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        RoleName         @unique
+  description String?
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+
+  roles       RolePermission[]
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+
+  userId    String
+  roleId    String
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+//
+// ============================================================
+// ACADEMIC STRUCTURE
+// ============================================================
+//
+
+model College {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  name        String
+  description String?
+  isActive    Boolean      @default(true)
+
+  departments Department[]
+  programs    Program[]
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model Department {
+  id          String      @id @default(uuid())
+  code        String      @unique
+  name        String
+  description String?
+  isActive    Boolean     @default(true)
+
+  collegeId   String
+  college     College     @relation(fields: [collegeId], references: [id], onDelete: Restrict)
+
+  programs    Program[]
+  students    Student[]
+  staff       Staff[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([collegeId])
+  @@index([name])
+  @@index([isActive])
+}
+
+model Program {
+  id            String      @id @default(uuid())
+  code          String      @unique
+  name          String
+  degreeType    String
+  durationYears Int
+  description   String?
+  isActive      Boolean     @default(true)
+
+  collegeId     String
+  departmentId  String
+
+  college       College     @relation(fields: [collegeId], references: [id], onDelete: Restrict)
+  department    Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  students      Student[]
+  batches       Batch[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([collegeId])
+  @@index([departmentId])
+  @@index([name])
+  @@index([isActive])
+}
+
+model AcademicYear {
+  id          String      @id @default(uuid())
+  name        String      @unique
+  startDate   DateTime
+  endDate     DateTime
+  isCurrent   Boolean     @default(false)
+
+  semesters   Semester[]
+  batches     Batch[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([isCurrent])
+}
+
+model Semester {
+  id             String          @id @default(uuid())
+  name           String
+  code           String
+  startDate      DateTime
+  endDate        DateTime
+  status         SemesterStatus  @default(UPCOMING)
+
+  academicYearId String
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([academicYearId, code])
+  @@index([academicYearId])
+  @@index([status])
+}
+
+model Batch {
+  id             String        @id @default(uuid())
+  name           String
+  admissionYear  Int
+  graduationYear Int?
+  isActive       Boolean       @default(true)
+
+  academicYearId String
+  programId      String
+
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  program        Program       @relation(fields: [programId], references: [id], onDelete: Restrict)
+
+  students       Student[]
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([name, programId])
+  @@index([academicYearId])
+  @@index([programId])
+  @@index([admissionYear])
+  @@index([isActive])
+}
+
+//
+// ============================================================
+// STUDENT
+// ============================================================
+//
+
+model Student {
+  id             String      @id @default(uuid())
+  studentId      String      @unique
+  firstName      String
+  middleName     String?
+  lastName       String
+  gender         String?
+  dateOfBirth    DateTime?
+  phone          String?
+  email          String?
+  address        String?
+  admissionDate  DateTime?
+  graduationDate DateTime?
+  isActive       Boolean     @default(true)
+
+  userId         String?     @unique
+  departmentId   String
+  programId      String
+  batchId        String?
+
+  user           User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  department     Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  program        Program     @relation(fields: [programId], references: [id], onDelete: Restrict)
+  batch          Batch?      @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  clearanceRequests ClearanceRequest[]
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([studentId])
+  @@index([departmentId])
+  @@index([programId])
+  @@index([batchId])
+  @@index([isActive])
+}
+
+//
+// ============================================================
+// STAFF
+// ============================================================
+//
+
+model Staff {
+  id           String       @id @default(uuid())
+  employeeId   String       @unique
+  firstName    String
+  middleName   String?
+  lastName     String
+  email        String?
+  phone        String?
+  position     String?
+  status       StaffStatus  @default(ACTIVE)
+
+  userId       String?      @unique
+  departmentId String?
+
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([employeeId])
+  @@index([departmentId])
+  @@index([status])
+}
+
+//
+// ============================================================
+// CLEARANCE UNIT
+// ============================================================
+//
+
+model ClearanceUnit {
+  id            String                  @id @default(uuid())
+  code          String                  @unique
+  name          String
+  description   String?
+  isActive      Boolean                 @default(true)
+
+  templateItems ClearanceTemplateItem[]
+  workflowSteps WorkflowStep[]
+  clearanceItems ClearanceItem[]
+
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+}
+
+//
+// ============================================================
+// CLEARANCE TEMPLATE
+// ============================================================
+//
+
+model ClearanceTemplate {
+  id               String                  @id @default(uuid())
+  code             String                  @unique
+  name             String
+  description      String?
+  isActive         Boolean                 @default(true)
+
+  items            ClearanceTemplateItem[]
+  workflows        Workflow[]
+  clearanceRequests ClearanceRequest[]
+
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+}
+
+//
+// ============================================================
+// CLEARANCE TEMPLATE ITEM
+// ============================================================
+//
+
+model ClearanceTemplateItem {
+  id             String             @id @default(uuid())
+  name           String
+  description    String?
+  isRequired     Boolean            @default(true)
+  order          Int                @default(0)
+  isActive       Boolean            @default(true)
+
+  templateId     String
+  unitId         String
+
+  template       ClearanceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  unit           ClearanceUnit     @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  clearanceItems ClearanceItem[]
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([templateId, unitId])
+  @@index([templateId])
+  @@index([unitId])
+  @@index([isRequired])
+  @@index([isActive])
+}
+
+//
+// ============================================================
+// WORKFLOW
+// ============================================================
+//
+
+model Workflow {
+  id               String             @id @default(uuid())
+  code             String             @unique
+  name             String
+  description      String?
+  isActive         Boolean            @default(true)
+
+  templateId       String
+  template         ClearanceTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  steps            WorkflowStep[]
+  transitions      WorkflowTransition[]
+  clearanceRequests ClearanceRequest[]
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([templateId])
+  @@index([isActive])
+}
+
+//
+// ============================================================
+// WORKFLOW STEP
+// ============================================================
+//
+
+model WorkflowStep {
+  id              String                @id @default(uuid())
+  name            String
+  description     String?
+  type            WorkflowStepType
+  order           Int                   @default(0)
+  isRequired      Boolean               @default(true)
+  isActive        Boolean               @default(true)
+
+  workflowId      String
+  workflow        Workflow              @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  unitId          String?
+  unit            ClearanceUnit?        @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  fromTransitions WorkflowTransition[]  @relation("WorkflowTransitionFrom")
+  toTransitions   WorkflowTransition[]  @relation("WorkflowTransitionTo")
+
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([workflowId])
+  @@index([unitId])
+  @@index([type])
+  @@index([order])
+  @@index([isActive])
+}
+
+//
+// ============================================================
+// WORKFLOW TRANSITION
+// ============================================================
+//
+
+model WorkflowTransition {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  action      String
+
+  workflowId  String
+  fromStepId  String
+  toStepId    String
+
+  workflow    Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  fromStep    WorkflowStep @relation("WorkflowTransitionFrom", fields: [fromStepId], references: [id], onDelete: Cascade)
+
+  toStep      WorkflowStep @relation("WorkflowTransitionTo", fields: [toStepId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([workflowId])
+  @@index([fromStepId])
+  @@index([toStepId])
+  @@unique([workflowId, fromStepId, toStepId])
+}
+
+//
+// ============================================================
+// CLEARANCE REQUEST
+// ============================================================
+//
+
+model ClearanceRequest {
+  id                  String                 @id @default(uuid())
+  requestNumber       String                 @unique
+  status              ClearanceRequestStatus @default(DRAFT)
+
+  submittedAt        DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  studentId           String
+  templateId          String
+  workflowId          String
+
+  student             Student               @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  template            ClearanceTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  workflow            Workflow              @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+
+  items               ClearanceItem[]
+  approvals           Approval[]
+
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([studentId])
+  @@index([templateId])
+  @@index([workflowId])
+  @@index([status])
+  @@index([submittedAt])
+}
+
+//
+// ============================================================
+// CLEARANCE ITEM
+// ============================================================
+//
+
+model ClearanceItem {
+  id             String               @id @default(uuid())
+  status         ClearanceItemStatus  @default(PENDING)
+  comment        String?
+  reviewedAt     DateTime?
+
+  requestId      String
+  templateItemId String
+  unitId         String
+
+  request        ClearanceRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  templateItem   ClearanceTemplateItem @relation(fields: [templateItemId], references: [id], onDelete: Restrict)
+  unit           ClearanceUnit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  approvals      Approval[]
+
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([requestId, templateItemId])
+  @@index([requestId])
+  @@index([templateItemId])
+  @@index([unitId])
+  @@index([status])
+}
+
+//
+// ============================================================
+// APPROVAL
+// ============================================================
+//
+
+model Approval {
+  id              String          @id @default(uuid())
+  status          ApprovalStatus
+  comment         String?
+  approvedAt      DateTime?
+
+  requestId       String
+  clearanceItemId String?
+  approverId      String
+
+  request         ClearanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  clearanceItem   ClearanceItem?   @relation(fields: [clearanceItemId], references: [id], onDelete: Cascade)
+  approver        User             @relation(fields: [approverId], references: [id], onDelete: Restrict)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([requestId])
+  @@index([clearanceItemId])
+  @@index([approverId])
+  @@index([status])
+}

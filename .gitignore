@@ -20,3 +20,8 @@ storage/
 
 .DS_Store
 Thumbs.db
+# Local agent tooling and TypeScript build cache
+**/.agents/
+**/.claude/
+**/.windsurf/
+*.tsbuildinfo
