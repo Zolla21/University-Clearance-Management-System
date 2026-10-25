@@ -888,3 +888,260 @@ body:has(.login-page) {
   font-weight: 700;
 }
 
+/* Clearance request review interface */
+.request-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.review-panel {
+  margin-top: 24px;
+  scroll-margin-top: 24px;
+}
+
+.request-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.request-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e7ebf2;
+  border-radius: 12px;
+  background: #f8faff;
+  min-width: 0;
+}
+
+.request-summary span,
+.review-controls label {
+  color: #78869a;
+  font-size: 13px;
+}
+
+.request-summary strong {
+  color: #10264a;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.item-heading {
+  margin-top: 28px;
+}
+
+.review-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.review-item {
+  padding: 20px;
+  border: 1px solid #e7ebf2;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.review-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.review-item-header h4 {
+  margin: 0 0 8px;
+  color: #10264a;
+  font-size: 17px;
+}
+
+.review-item-header p {
+  margin: 0;
+  color: #78869a;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.review-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 18px;
+  color: #78869a;
+  font-size: 13px;
+}
+
+.review-item-meta strong {
+  color: #193861;
+}
+
+.review-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e7ebf2;
+}
+
+.review-controls textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px 14px;
+  border: 1px solid #d8dfeb;
+  border-radius: 9px;
+  background: #fff;
+  color: #18263b;
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.review-controls textarea:focus {
+  outline: 2px solid #d9ad45;
+  outline-offset: 1px;
+  border-color: #193861;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.review-button {
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.review-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.review-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.review-button.approve {
+  background: #176b3a;
+  color: #ffffff;
+  border: 1px solid #176b3a;
+}
+
+.review-button.reject {
+  background: #b42318;
+  color: #ffffff;
+  border: 1px solid #b42318;
+}
+
+.review-button.return {
+  background: #815c0b;
+  color: #ffffff;
+  border: 1px solid #815c0b;
+}
+
+.review-button.neutral {
+  background: #193861;
+  color: #ffffff;
+  border: 1px solid #193861;
+}
+
+.review-button.reject {
+  background: #fff0ef;
+  color: #b42318;
+  border-color: #f4c7c3;
+}
+
+.review-button.return {
+  background: #fff6df;
+  color: #815c0b;
+  border-color: #f0d99b;
+}
+
+.review-button.neutral {
+  background: #eef2f8;
+  color: #193861;
+  border-color: #d8dfeb;
+}
+
+.item-comment,
+.review-readonly {
+  margin-top: 16px;
+  color: #78869a;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.item-comment strong {
+  color: #193861;
+}
+
+.review-error,
+.review-success {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.review-error {
+  background: #fff0ef;
+  color: #b42318;
+  border: 1px solid #f4c7c3;
+}
+
+.review-success {
+  background: #e6f5ec;
+  color: #176b3a;
+  border: 1px solid #bce4cb;
+}
+
+@media (max-width: 900px) {
+  .request-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .request-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .request-row-actions {
+    justify-content: flex-start;
+  }
+
+  .review-item-header {
+    flex-direction: column;
+  }
+
+  .review-item {
+    padding: 15px;
+  }
+
+  .review-actions {
+    flex-direction: column;
+  }
+
+  .review-button {
+    width: 100%;
+  }
+}

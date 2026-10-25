@@ -1211,16 +1211,7 @@ export class ClearanceService {
       );
     }
 
-    if (
-      item.status !== ClearanceItemStatus.PENDING &&
-      item.status !== ClearanceItemStatus.IN_REVIEW
-    ) {
-      throw new ConflictException(
-        'Only pending or in-review clearance items can be reviewed.',
-      );
-    }
-
-    // Enforce office-specific authorization.
+    // Enforce office-specific authorization BEFORE checking item status.
     if (!privileged) {
       const unitCode = item.unit.code.toUpperCase();
 
@@ -1250,6 +1241,15 @@ export class ClearanceService {
           'Property Officers may review only Property clearance items.',
         );
       }
+    }
+
+    if (
+      item.status !== ClearanceItemStatus.PENDING &&
+      item.status !== ClearanceItemStatus.IN_REVIEW
+    ) {
+      throw new ConflictException(
+        'Only pending or in-review clearance items can be reviewed.',
+      );
     }
 
     const nextItemStatus: ClearanceItemStatus =
@@ -1308,24 +1308,19 @@ export class ClearanceService {
         dto.decision === ClearanceDecision.APPROVED ||
         dto.decision === ClearanceDecision.REJECTED
       ) {
-try {
-  await tx.approval.create({
-    data: {
-      requestId,
-      clearanceItemId: itemId,
-      approverId: userId,
-      status:
-        dto.decision === ClearanceDecision.APPROVED
-          ? ApprovalStatus.APPROVED
-          : ApprovalStatus.REJECTED,
-      comment: dto.comment?.trim() || null,
-      approvedAt: new Date(),
-    },
-  });
-} catch (error) {
-  console.error('APPROVAL INSERT FAILED:', error);
-  throw error;
-}
+        await tx.approval.create({
+          data: {
+            requestId,
+            clearanceItemId: itemId,
+            approverId: userId,
+            status:
+              dto.decision === ClearanceDecision.APPROVED
+                ? ApprovalStatus.APPROVED
+                : ApprovalStatus.REJECTED,
+            comment: dto.comment?.trim() || null,
+            approvedAt: new Date(),
+          },
+        });
       }
 
       const items = await tx.clearanceItem.findMany({
@@ -1394,5 +1389,6 @@ try {
       });
     });
   }
+
 
 }
