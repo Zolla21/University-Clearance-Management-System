@@ -583,6 +583,7 @@ model ClearanceItem {
   id             String               @id @default(uuid())
   status         ClearanceItemStatus  @default(PENDING)
   comment        String?
+  correctionComment String?
   reviewedAt     DateTime?
 
   requestId      String

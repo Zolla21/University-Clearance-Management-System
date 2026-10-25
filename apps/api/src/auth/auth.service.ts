@@ -54,9 +54,13 @@ export class AuthService {
       },
     });
 
-    if (!user || !user.passwordHash) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+if (
+  !user ||
+  !user.passwordHash ||
+  user.status !== 'ACTIVE'
+) {
+  throw new UnauthorizedException('Invalid credentials');
+}
 
     const passwordValid = await this.comparePassword(
       password,
