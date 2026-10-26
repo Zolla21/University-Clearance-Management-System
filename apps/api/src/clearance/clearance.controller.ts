@@ -1,4 +1,4 @@
-﻿import { SubmitCorrectionDto } from './dto/submit-correction.dto';
+import { SubmitCorrectionDto } from './dto/submit-correction.dto';
 import { ReviewClearanceItemDto } from './dto/review-clearance-item.dto';
 import {
   Body,
@@ -207,6 +207,13 @@ export class ClearanceController {
   ) {
     return this.clearanceService.createWorkflowTransition(workflowId, dto);
   }
+  @Delete('workflow-transitions/:id')
+  @Roles('ADMINISTRATOR', 'SUPER_ADMINISTRATOR')
+  deleteWorkflowTransition(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.clearanceService.deleteWorkflowTransition(id);
+  }
 
   @Get('workflows/:workflowId/transitions')
   @Roles(
@@ -344,14 +351,15 @@ export class ClearanceController {
       req.user.roles ?? [],
     );
   }
-  
+
+
   // Review a clearance item
   @Post('requests/:id/items/:itemId/review')
   @Roles(
     'ADMINISTRATOR',
     'SUPER_ADMINISTRATOR',
-    'REGISTRAR',
     'CLEARANCE_STAFF',
+    'DEPARTMENT_STAFF',
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
@@ -371,4 +379,18 @@ export class ClearanceController {
     );
   }
 
+
+  // Final Registrar approval
+  @Post('requests/:id/final-approval')
+  @Roles('REGISTRAR')
+  finalizeClearanceRequest(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: any,
+  ) {
+    return this.clearanceService.finalizeClearanceRequest(
+      id,
+      req.user.id,
+      req.user.roles ?? [],
+    );
+  }
 }

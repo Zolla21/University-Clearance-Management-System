@@ -3,10 +3,10 @@ import { ReviewClearanceItemDto, ClearanceDecision } from './dto/review-clearanc
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-
 import { PrismaService } from '../database/prisma.service';
 import { CreateClearanceUnitDto } from './dto/create-clearance-unit.dto';
 import { CreateClearanceTemplateDto } from './dto/create-clearance-template.dto';
@@ -556,6 +556,46 @@ export class ClearanceService {
         fromStep: true,
         toStep: true,
       },
+    });
+  }
+
+  async deleteWorkflowTransition(id: string): Promise<any> {
+    const transition = await this.prisma.workflowTransition.findUnique({
+      where: { id },
+      include: {
+        workflow: {
+          include: {
+            steps: true,
+            transitions: true,
+          },
+        },
+      },
+    });
+
+    if (!transition) {
+      throw new NotFoundException('Workflow transition not found.');
+    }
+
+    const workflow = transition.workflow;
+
+    if (!workflow.isActive) {
+      throw new ConflictException(
+        'Cannot modify transitions in an inactive workflow.',
+      );
+    }
+
+    const remainingTransitions = workflow.transitions.filter(
+      (item) => item.id !== id,
+    );
+
+    // Validate the remaining graph before deleting anything.
+    this.validateWorkflowPath(
+      workflow.steps.filter((step) => step.isActive),
+      remainingTransitions,
+    );
+
+    return this.prisma.workflowTransition.delete({
+      where: { id },
     });
   }
 
@@ -1153,17 +1193,27 @@ export class ClearanceService {
     roles: string[],
     dto: ReviewClearanceItemDto,
   ): Promise<any> {
-    const privileged = this.hasRole(roles, this.privilegedRoles);
+    const privileged = this.hasRole(roles, [
+      'ADMINISTRATOR',
+      'SUPER_ADMINISTRATOR',
+    ]);
+
+    if (roles.includes('REGISTRAR') && !privileged) {
+      throw new ForbiddenException(
+        'The Registrar must use the final approval endpoint.',
+      );
+    }
 
     const allowedStaffRoles = [
       'CLEARANCE_STAFF',
+      'DEPARTMENT_STAFF',
       'FINANCE_OFFICER',
       'LIBRARY_OFFICER',
       'PROPERTY_OFFICER',
     ];
 
     if (!privileged && !this.hasRole(roles, allowedStaffRoles)) {
-      throw new BadRequestException(
+      throw new ForbiddenException(
         'You are not authorized to review clearance items.',
       );
     }
@@ -1211,15 +1261,24 @@ export class ClearanceService {
       );
     }
 
-    // Enforce office-specific authorization BEFORE checking item status.
+    // Enforce office-specific authorization.
     if (!privileged) {
       const unitCode = item.unit.code.toUpperCase();
+
+      if (
+        roles.includes('DEPARTMENT_STAFF') &&
+        unitCode !== 'DEPARTMENT'
+      ) {
+        throw new ForbiddenException(
+          'Department staff may review only Department clearance items.',
+        );
+      }
 
       if (
         roles.includes('FINANCE_OFFICER') &&
         unitCode !== 'FINANCE'
       ) {
-        throw new BadRequestException(
+        throw new ForbiddenException(
           'Finance Officers may review only Finance clearance items.',
         );
       }
@@ -1228,7 +1287,7 @@ export class ClearanceService {
         roles.includes('LIBRARY_OFFICER') &&
         unitCode !== 'LIBRARY'
       ) {
-        throw new BadRequestException(
+        throw new ForbiddenException(
           'Library Officers may review only Library clearance items.',
         );
       }
@@ -1237,8 +1296,17 @@ export class ClearanceService {
         roles.includes('PROPERTY_OFFICER') &&
         unitCode !== 'PROPERTY'
       ) {
-        throw new BadRequestException(
+        throw new ForbiddenException(
           'Property Officers may review only Property clearance items.',
+        );
+      }
+
+      if (
+        roles.includes('CLEARANCE_STAFF') &&
+        !['DORMITORY', 'COLLEGE'].includes(unitCode)
+      ) {
+        throw new ForbiddenException(
+          'Clearance staff may review only Dormitory and College clearance items.',
         );
       }
     }
@@ -1262,7 +1330,7 @@ export class ClearanceService {
             : ClearanceItemStatus.NOT_APPLICABLE;
 
     return this.prisma.$transaction(async (tx) => {
-      // Recheck status inside the transaction.
+      // Recheck the item inside the transaction.
       const currentItem = await tx.clearanceItem.findFirst({
         where: {
           id: itemId,
@@ -1270,6 +1338,7 @@ export class ClearanceService {
         },
         include: {
           request: true,
+          unit: true,
         },
       });
 
@@ -1293,6 +1362,64 @@ export class ClearanceService {
         );
       }
 
+      const requestItems = await tx.clearanceItem.findMany({
+        where: { requestId },
+        include: {
+          unit: true,
+          templateItem: true,
+        },
+      });
+
+      const unitCode = currentItem.unit.code.toUpperCase();
+
+      // A stage is complete only when all its required items are approved.
+      const isUnitApproved = (code: string): boolean => {
+        const unitItems = requestItems.filter(
+          (requestItem) =>
+            requestItem.unit.code.toUpperCase() === code &&
+            requestItem.templateItem.isRequired,
+        );
+
+        return (
+          unitItems.length > 0 &&
+          unitItems.every(
+            (requestItem) =>
+              requestItem.status === ClearanceItemStatus.APPROVED,
+          )
+        );
+      };
+
+      // Library, Property and Dormitory can proceed independently.
+      // Finance requires all three to be approved first.
+      if (
+        unitCode === 'FINANCE' &&
+        !['LIBRARY', 'PROPERTY', 'DORMITORY'].every(isUnitApproved)
+      ) {
+        throw new ConflictException(
+          'Finance clearance requires approved Library, Property, and Dormitory clearances.',
+        );
+      }
+
+      // Department follows Finance.
+      if (
+        unitCode === 'DEPARTMENT' &&
+        !isUnitApproved('FINANCE')
+      ) {
+        throw new ConflictException(
+          'Department clearance requires approved Finance clearance.',
+        );
+      }
+
+      // College follows Department.
+      if (
+        unitCode === 'COLLEGE' &&
+        !isUnitApproved('DEPARTMENT')
+      ) {
+        throw new ConflictException(
+          'College clearance requires approved Department clearance.',
+        );
+      }
+
       await tx.clearanceItem.update({
         where: { id: itemId },
         data: {
@@ -1303,7 +1430,7 @@ export class ClearanceService {
       });
 
       // ApprovalStatus supports only APPROVED and REJECTED.
-      // RETURNED and NOT_APPLICABLE are recorded on ClearanceItem.
+      // RETURNED and NOT_APPLICABLE are stored on ClearanceItem.
       if (
         dto.decision === ClearanceDecision.APPROVED ||
         dto.decision === ClearanceDecision.REJECTED
@@ -1325,9 +1452,6 @@ export class ClearanceService {
 
       const items = await tx.clearanceItem.findMany({
         where: { requestId },
-        include: {
-          templateItem: true,
-        },
       });
 
       const hasActionRequired = items.some(
@@ -1336,27 +1460,16 @@ export class ClearanceService {
           current.status === ClearanceItemStatus.RETURNED,
       );
 
-      const allResolved = items.every(
-        (current) =>
-          current.status === ClearanceItemStatus.APPROVED ||
-          current.status === ClearanceItemStatus.NOT_APPLICABLE ||
-          !current.templateItem.isRequired,
-      );
-
       const nextRequestStatus: ClearanceRequestStatus =
         hasActionRequired
           ? ClearanceRequestStatus.ACTION_REQUIRED
-          : allResolved
-            ? ClearanceRequestStatus.COMPLETED
-            : ClearanceRequestStatus.IN_PROGRESS;
+          : ClearanceRequestStatus.IN_PROGRESS;
 
       await tx.clearanceRequest.update({
         where: { id: requestId },
         data: {
           status: nextRequestStatus,
-          ...(nextRequestStatus === ClearanceRequestStatus.COMPLETED
-            ? { completedAt: new Date() }
-            : { completedAt: null }),
+          completedAt: null,
         },
       });
 
@@ -1390,5 +1503,98 @@ export class ClearanceService {
     });
   }
 
+
+
+  // Final approval by the Registrar
+  async finalizeClearanceRequest(
+    requestId: string,
+    userId: string,
+    roles: string[],
+  ): Promise<any> {
+    if (!roles.includes('REGISTRAR')) {
+      throw new ForbiddenException(
+        'Only the Registrar may finalize a clearance request.',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const request = await tx.clearanceRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          items: {
+            include: {
+              templateItem: true,
+            },
+          },
+          approvals: {
+            where: { clearanceItemId: null },
+          },
+        },
+      });
+
+      if (!request) {
+        throw new NotFoundException('Clearance request not found.');
+      }
+
+      if (
+        request.status !== ClearanceRequestStatus.SUBMITTED &&
+        request.status !== ClearanceRequestStatus.IN_PROGRESS
+      ) {
+        throw new ConflictException(
+          'This request is not eligible for final approval.',
+        );
+      }
+
+      const unresolvedItems = request.items.filter(
+        (item) =>
+          item.templateItem.isRequired &&
+          item.status !== ClearanceItemStatus.APPROVED,
+      );
+
+      if (unresolvedItems.length > 0) {
+        throw new ConflictException(
+          'Final approval is blocked until all required clearance items are resolved.',
+        );
+      }
+
+      if (request.approvals.length > 0) {
+        throw new ConflictException(
+          'A final Registrar decision has already been recorded.',
+        );
+      }
+
+      await tx.approval.create({
+        data: {
+          requestId,
+          clearanceItemId: null,
+          approverId: userId,
+          status: ApprovalStatus.APPROVED,
+          comment: 'Final Registrar approval',
+          approvedAt: new Date(),
+        },
+      });
+
+      return tx.clearanceRequest.update({
+        where: { id: requestId },
+        data: {
+          status: ClearanceRequestStatus.COMPLETED,
+          completedAt: new Date(),
+        },
+        include: {
+          student: true,
+          template: true,
+          workflow: true,
+          items: {
+            include: {
+              templateItem: true,
+              unit: true,
+              approvals: true,
+            },
+          },
+          approvals: true,
+        },
+      });
+    });
+  }
 
 }
