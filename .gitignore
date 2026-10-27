@@ -25,3 +25,6 @@ Thumbs.db
 **/.claude/
 **/.windsurf/
 *.tsbuildinfo
+
+# Local test-account password reset helper
+/apps/api/reset-test-student-password.ts
