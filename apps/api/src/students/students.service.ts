@@ -25,16 +25,26 @@ export class StudentsService {
     try {
       return await this.prisma.student.create({
         data: {
-          ...dto,
+          studentId: dto.studentId,
+          firstName: dto.firstName,
+          middleName: dto.middleName,
+          lastName: dto.lastName,
+          gender: dto.gender,
           dateOfBirth: dto.dateOfBirth
             ? new Date(dto.dateOfBirth)
             : undefined,
+          phone: dto.phone,
+          email: dto.email,
+          address: dto.address,
           admissionDate: dto.admissionDate
             ? new Date(dto.admissionDate)
             : undefined,
           graduationDate: dto.graduationDate
             ? new Date(dto.graduationDate)
             : undefined,
+          departmentId: dto.departmentId,
+          programId: dto.programId,
+          batchId: dto.batchId,
         },
         include: {
           department: true,
@@ -149,16 +159,26 @@ export class StudentsService {
       return await this.prisma.student.update({
         where: { id },
         data: {
-          ...dto,
+          studentId: dto.studentId,
+          firstName: dto.firstName,
+          middleName: dto.middleName,
+          lastName: dto.lastName,
+          gender: dto.gender,
           dateOfBirth: dto.dateOfBirth
             ? new Date(dto.dateOfBirth)
             : undefined,
+          phone: dto.phone,
+          email: dto.email,
+          address: dto.address,
           admissionDate: dto.admissionDate
             ? new Date(dto.admissionDate)
             : undefined,
           graduationDate: dto.graduationDate
             ? new Date(dto.graduationDate)
             : undefined,
+          departmentId: dto.departmentId,
+          programId: dto.programId,
+          batchId: dto.batchId,
         },
         include: {
           department: true,
