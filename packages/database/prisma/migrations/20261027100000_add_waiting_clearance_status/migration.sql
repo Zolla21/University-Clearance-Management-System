@@ -1,0 +1,1 @@
+ALTER TYPE "ClearanceItemStatus" ADD VALUE IF NOT EXISTS 'WAITING';

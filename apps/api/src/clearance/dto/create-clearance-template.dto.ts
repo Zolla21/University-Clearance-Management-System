@@ -1,6 +1,7 @@
 
 import {
   IsBoolean,
+  IsIn,
   IsOptional,
   IsString,
   Length,
@@ -23,4 +24,8 @@ export class CreateClearanceTemplateDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsIn(['SEMESTER', 'END_OF_YEAR', 'GRADUATION', 'OTHER'])
+  clearanceType?: string;
 }

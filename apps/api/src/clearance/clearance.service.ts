@@ -1,4 +1,4 @@
-﻿import { ClearanceItemStatus, ClearanceRequestStatus, ApprovalStatus } from '@epsu/database';
+import { ClearanceItemStatus, ClearanceRequestStatus, ApprovalStatus } from '@epsu/database';
 import { ReviewClearanceItemDto, ClearanceDecision } from './dto/review-clearance-item.dto';
 import {
   BadRequestException,
@@ -35,6 +35,8 @@ export class ClearanceService {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
+    'COLLEGE_OFFICER',
   ];
 
   private hasRole(roles: string[], allowedRoles: string[]): boolean {
@@ -157,6 +159,7 @@ export class ClearanceService {
           name: dto.name.trim(),
           description: dto.description?.trim(),
           isActive: dto.isActive ?? true,
+          clearanceType: dto.clearanceType ?? 'GRADUATION',
         },
       });
     } catch (error: unknown) {
@@ -618,7 +621,56 @@ export class ClearanceService {
     });
   }
 
-  // Create Clearance Request
+  // Academic Years
+
+  async findAllAcademicYears() {
+    return this.prisma.academicYear.findMany({
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        isCurrent: true,
+      },
+      orderBy: [
+        { isCurrent: 'desc' },
+        { startDate: 'desc' },
+      ],
+    });
+  }
+
+  // Semesters for a selected academic year
+
+  async findSemestersByAcademicYear(academicYearId: string) {
+    const academicYear = await this.prisma.academicYear.findUnique({
+      where: { id: academicYearId },
+      select: { id: true },
+    });
+
+    if (!academicYear) {
+      throw new NotFoundException('Academic year not found.');
+    }
+
+    return this.prisma.semester.findMany({
+      where: { academicYearId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+        academicYearId: true,
+      },
+      orderBy: [
+        { startDate: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+  }
+
+
+    // Create Clearance Request
 
   async createClearanceRequest(
     dto: CreateClearanceRequestDto,
@@ -664,6 +716,16 @@ export class ClearanceService {
       throw new NotFoundException('Active clearance template not found.');
     }
 
+    if (template.clearanceType !== dto.clearanceType) {
+      throw new BadRequestException(
+        'The selected template is configured for ' +
+          template.clearanceType +
+          ' clearance, not ' +
+          dto.clearanceType +
+          '.',
+      );
+    }
+
     if (template.items.length === 0) {
       throw new BadRequestException(
         'The selected template has no active clearance items.',
@@ -702,6 +764,55 @@ export class ClearanceService {
 
     this.validateWorkflowPath(workflow.steps, workflow.transitions);
 
+    // Validate clearance application details.
+    const clearanceType = dto.clearanceType;
+
+
+
+    if (
+      clearanceType === 'OTHER' &&
+      !dto.otherReason?.trim()
+    ) {
+      throw new BadRequestException(
+        'Please provide a reason for the other clearance type.',
+      );
+    }
+
+    if (dto.academicYearId) {
+      const academicYear = await this.prisma.academicYear.findUnique({
+        where: { id: dto.academicYearId },
+        select: { id: true },
+      });
+
+      if (!academicYear) {
+        throw new BadRequestException(
+          'The selected academic year was not found.',
+        );
+      }
+    }
+
+    if (dto.semesterId) {
+      if (!dto.academicYearId) {
+        throw new BadRequestException(
+          'A semester must be associated with an academic year.',
+        );
+      }
+
+      const semester = await this.prisma.semester.findFirst({
+        where: {
+          id: dto.semesterId,
+          academicYearId: dto.academicYearId,
+        },
+        select: { id: true },
+      });
+
+      if (!semester) {
+        throw new BadRequestException(
+          'The selected semester does not belong to the selected academic year.',
+        );
+      }
+    }
+
     const requestNumber = `CLR-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2, 8)
@@ -714,18 +825,43 @@ export class ClearanceService {
           studentId: dto.studentId,
           templateId: dto.templateId,
           workflowId: dto.workflowId,
+          clearanceType: dto.clearanceType,
+          academicYearId: dto.academicYearId ?? null,
+          semesterId: dto.semesterId ?? null,
+          otherReason: dto.otherReason?.trim() || null,
           status: 'DRAFT',
         },
       });
 
+
+
       await tx.clearanceItem.createMany({
-        data: template.items.map((item) => ({
-          requestId: request.id,
-          templateItemId: item.id,
-          unitId: item.unitId,
-          status: 'PENDING',
-        })),
+        data: template.items.map((item) => {
+          const unitCode = item.unit.code.toUpperCase();
+
+          const initialStatus: ClearanceItemStatus = [
+            'LIBRARY',
+            'PROPERTY',
+            'DORMITORY',
+          ].includes(unitCode)
+            ? ClearanceItemStatus.PENDING
+            : [
+                'FINANCE',
+                'DEPARTMENT',
+                'COLLEGE',
+              ].includes(unitCode)
+              ? ClearanceItemStatus.WAITING
+              : ClearanceItemStatus.PENDING;
+
+          return {
+            requestId: request.id,
+            templateItemId: item.id,
+            unitId: item.unitId,
+            status: initialStatus,
+          };
+        }),
       });
+
 
       return tx.clearanceRequest.findUnique({
         where: { id: request.id },
@@ -910,6 +1046,8 @@ export class ClearanceService {
     });
   }
 
+
+
   // Resubmit a clearance request after required corrections.
   async resubmitClearanceRequest(
     id: string,
@@ -954,6 +1092,7 @@ export class ClearanceService {
         );
       }
 
+
       await tx.clearanceItem.updateMany({
         where: {
           requestId: id,
@@ -968,6 +1107,7 @@ export class ClearanceService {
           status: ClearanceItemStatus.PENDING,
         },
       });
+
 
       await tx.clearanceRequest.update({
         where: { id },
@@ -1002,7 +1142,9 @@ export class ClearanceService {
     });
   }
 
-  
+
+
+
   // Submit a student's explanation for a returned or rejected item.
   async submitClearanceCorrection(
     requestId: string,
@@ -1184,7 +1326,7 @@ export class ClearanceService {
 
     return request;
   }
-  
+
   // Review a clearance item
   async reviewClearanceItem(
     requestId: string,
@@ -1210,6 +1352,8 @@ export class ClearanceService {
       'FINANCE_OFFICER',
       'LIBRARY_OFFICER',
       'PROPERTY_OFFICER',
+      'DORMITORY_OFFICER',
+      'COLLEGE_OFFICER',
     ];
 
     if (!privileged && !this.hasRole(roles, allowedStaffRoles)) {
@@ -1302,6 +1446,24 @@ export class ClearanceService {
       }
 
       if (
+        roles.includes('DORMITORY_OFFICER') &&
+        unitCode !== 'DORMITORY'
+      ) {
+        throw new ForbiddenException(
+          'Dormitory Officers may review only Dormitory clearance items.',
+        );
+      }
+
+      if (
+        roles.includes('COLLEGE_OFFICER') &&
+        unitCode !== 'COLLEGE'
+      ) {
+        throw new ForbiddenException(
+          'College Officers may review only College clearance items.',
+        );
+      }
+
+      if (
         roles.includes('CLEARANCE_STAFF') &&
         !['DORMITORY', 'COLLEGE'].includes(unitCode)
       ) {
@@ -1312,8 +1474,7 @@ export class ClearanceService {
     }
 
     if (
-      item.status !== ClearanceItemStatus.PENDING &&
-      item.status !== ClearanceItemStatus.IN_REVIEW
+      item.status !== ClearanceItemStatus.PENDING && item.status !== ClearanceItemStatus.IN_REVIEW && item.status !== ClearanceItemStatus.WAITING
     ) {
       throw new ConflictException(
         'Only pending or in-review clearance items can be reviewed.',
@@ -1344,8 +1505,7 @@ export class ClearanceService {
 
       if (
         !currentItem ||
-        (currentItem.status !== ClearanceItemStatus.PENDING &&
-          currentItem.status !== ClearanceItemStatus.IN_REVIEW)
+        (currentItem.status !== ClearanceItemStatus.PENDING && currentItem.status !== ClearanceItemStatus.IN_REVIEW && currentItem.status !== ClearanceItemStatus.WAITING)
       ) {
         throw new ConflictException(
           'This clearance item has already been reviewed.',

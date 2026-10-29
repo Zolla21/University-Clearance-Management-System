@@ -1,3 +1,4 @@
+
 import { RolesGuard } from '../auth/guards/roles/roles.guard';
 import {
   Body,
@@ -8,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
   DefaultValuePipe,
   ParseIntPipe,
@@ -37,7 +39,11 @@ export class StudentsController {
   ) {
     return this.studentsService.findAll(search, page, limit, active);
   }
-
+@Get('me')
+@UseGuards(JwtAuthGuard)
+getMe(@Req() req: { user: { id: string } }) {
+  return this.studentsService.findMe(req.user.id);
+}
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentsService.findOne(id);

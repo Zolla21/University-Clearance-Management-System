@@ -133,7 +133,40 @@ export class StudentsService {
       },
     };
   }
+async findMe(userId: string): Promise<any> {
+  const student = await this.prisma.student.findUnique({
+    where: { userId },
+    select: {
+      id: true,
+      studentId: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      email: true,
+      isActive: true,
+      department: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      program: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
 
+  if (!student) {
+    throw new NotFoundException(
+      'No student profile is linked to this account.',
+    );
+  }
+
+  return student;
+}
   async findOne(id: string): Promise<any> {
     const student = await this.prisma.student.findUnique({
       where: { id },

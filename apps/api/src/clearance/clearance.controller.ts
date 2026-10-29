@@ -49,6 +49,7 @@ export class ClearanceController {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
     'STUDENT',
   )
   findAllUnits() {
@@ -65,6 +66,7 @@ export class ClearanceController {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
     'STUDENT',
   )
   findUnitById(@Param('id', new ParseUUIDPipe()) id: string) {
@@ -89,6 +91,7 @@ export class ClearanceController {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
     'STUDENT',
   )
   findAllTemplates() {
@@ -105,6 +108,7 @@ export class ClearanceController {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
     'STUDENT',
   )
   findTemplateById(@Param('id', new ParseUUIDPipe()) id: string) {
@@ -227,7 +231,42 @@ export class ClearanceController {
   ) {
     return this.clearanceService.findWorkflowTransitions(workflowId);
   }
+  @Get('academic-years')
+  @Roles(
+    'ADMINISTRATOR',
+    'SUPER_ADMINISTRATOR',
+    'REGISTRAR',
+    'CLEARANCE_STAFF',
+    'DEPARTMENT_STAFF',
+    'FINANCE_OFFICER',
+    'LIBRARY_OFFICER',
+    'PROPERTY_OFFICER',
+    'STUDENT',
+  )
+  findAllAcademicYears() {
+    return this.clearanceService.findAllAcademicYears();
+  }
 
+  @Get('academic-years/:academicYearId/semesters')
+  @Roles(
+    'ADMINISTRATOR',
+    'SUPER_ADMINISTRATOR',
+    'REGISTRAR',
+    'CLEARANCE_STAFF',
+    'DEPARTMENT_STAFF',
+    'FINANCE_OFFICER',
+    'LIBRARY_OFFICER',
+    'PROPERTY_OFFICER',
+    'STUDENT',
+  )
+  findSemestersByAcademicYear(
+    @Param('academicYearId', new ParseUUIDPipe())
+    academicYearId: string,
+  ) {
+    return this.clearanceService.findSemestersByAcademicYear(
+      academicYearId,
+    );
+  }
   // Clearance Requests
 
   @Post('requests')
@@ -312,6 +351,7 @@ export class ClearanceController {
 
   @Get('requests')
   @Roles(
+    'COLLEGE_OFFICER',
     'STUDENT',
     'ADMINISTRATOR',
     'SUPER_ADMINISTRATOR',
@@ -321,6 +361,7 @@ export class ClearanceController {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
   )
   findAllClearanceRequests(@Req() req: any) {
     return this.clearanceService.findAllClearanceRequests(
@@ -331,6 +372,7 @@ export class ClearanceController {
 
   @Get('requests/:id')
   @Roles(
+    'COLLEGE_OFFICER',
     'STUDENT',
     'ADMINISTRATOR',
     'SUPER_ADMINISTRATOR',
@@ -340,6 +382,7 @@ export class ClearanceController {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
   )
   findClearanceRequestById(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -356,6 +399,7 @@ export class ClearanceController {
   // Review a clearance item
   @Post('requests/:id/items/:itemId/review')
   @Roles(
+    'COLLEGE_OFFICER',
     'ADMINISTRATOR',
     'SUPER_ADMINISTRATOR',
     'CLEARANCE_STAFF',
@@ -363,6 +407,7 @@ export class ClearanceController {
     'FINANCE_OFFICER',
     'LIBRARY_OFFICER',
     'PROPERTY_OFFICER',
+    'DORMITORY_OFFICER',
   )
   reviewClearanceItem(
     @Param('id', new ParseUUIDPipe()) id: string,

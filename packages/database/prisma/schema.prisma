@@ -21,6 +21,8 @@ enum RoleName {
   FINANCE_OFFICER
   LIBRARY_OFFICER
   PROPERTY_OFFICER
+  DORMITORY_OFFICER
+  COLLEGE_OFFICER
   ADMINISTRATOR
   SUPER_ADMINISTRATOR
 }
@@ -44,6 +46,7 @@ enum SemesterStatus {
 }
 
 enum ClearanceItemStatus {
+  WAITING
   PENDING
   IN_REVIEW
   APPROVED
@@ -400,6 +403,7 @@ model ClearanceTemplate {
   name             String
   description      String?
   isActive         Boolean                 @default(true)
+  clearanceType    String                  @default("GRADUATION")
 
   items            ClearanceTemplateItem[]
   workflows        Workflow[]
@@ -555,6 +559,10 @@ model ClearanceRequest {
   studentId           String
   templateId          String
   workflowId          String
+  clearanceType  String @default("GRADUATION")
+  academicYearId String?
+  semesterId     String?
+  otherReason    String?
 
   student             Student               @relation(fields: [studentId], references: [id], onDelete: Restrict)
   template            ClearanceTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)

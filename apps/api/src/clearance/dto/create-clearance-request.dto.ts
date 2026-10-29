@@ -1,4 +1,11 @@
-import { IsUUID } from 'class-validator';
+
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateClearanceRequestDto {
   @IsUUID()
@@ -9,4 +16,20 @@ export class CreateClearanceRequestDto {
 
   @IsUUID()
   workflowId: string;
+
+  @IsIn(['SEMESTER', 'END_OF_YEAR', 'GRADUATION', 'OTHER'])
+  clearanceType: string;
+
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  semesterId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  otherReason?: string;
 }
